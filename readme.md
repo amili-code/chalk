@@ -192,6 +192,16 @@ log.error.underline('Critical!'); // theme style + built-in modifier
 log.underline.error('Critical!'); // same, just chained the other way
 ```
 
+The theme definition is exposed back on the chalk instance as a read-only
+`theme` property. It is reachable through any chain — `log.theme`,
+`log.error.theme`, and `log.bold.error.theme` all return the same object.
+
+```js
+log.theme;          //=> { success: 'green', error: ['red', 'bold'], warning: 'yellow' }
+log.error.theme;    //=> same object
+log.theme = {...};  // throws (the property is non-writable)
+```
+
 Both the `level` option and the `level` property throw for anything that is not an integer from 0 to 3. Omit the option, or pass `undefined`, to have the level detected instead.
 
 ### supportsColor

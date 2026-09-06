@@ -160,3 +160,49 @@ test('theme styles work inside template literals and chain with built-ins', t =>
 		'\u{1B}[32mok\u{1B}[39m \u{1B}[31mbad\u{1B}[39m',
 	);
 });
+
+test('`chalk.theme` returns the theme definition on a themed instance', t => {
+	const definition = {success: 'green', error: ['red', 'bold']};
+	const themed = new Chalk({theme: definition});
+	t.deepEqual(themed.theme, definition);
+});
+
+test('`chalk.theme` is `undefined` for an unthemed instance', t => {
+	const plain = new Chalk();
+	t.is(plain.theme, undefined);
+
+	// And for the module-level default.
+	t.is(chalk.theme, undefined);
+});
+
+test('`chalk.theme` is accessible through the chain (builders walk back via GENERATOR)', t => {
+	const definition = {error: 'red'};
+	const themed = new Chalk({theme: definition});
+
+	t.deepEqual(themed.theme, definition);
+	t.deepEqual(themed.error.theme, definition);
+	t.deepEqual(themed.bold.error.theme, definition);
+	t.deepEqual(themed.error.italic.bold.theme, definition);
+});
+
+test('two themed instances expose independent theme definitions', t => {
+	const a = new Chalk({theme: {info: 'cyan'}});
+	const b = new Chalk({theme: {info: 'magenta'}});
+
+	t.deepEqual(a.theme, {info: 'cyan'});
+	t.deepEqual(b.theme, {info: 'magenta'});
+	t.not(a.theme, b.theme);
+});
+
+test('`chalk.theme` is non-writable on the chalk root', t => {
+	const themed = new Chalk({theme: {success: 'green'}});
+	t.throws(() => {
+		themed.theme = {error: 'red'};
+	}, {instanceOf: TypeError});
+});
+
+test('`chalk.theme` returns the same object that was passed to the constructor', t => {
+	const definition = {success: 'green'};
+	const themed = new Chalk({theme: definition});
+	t.is(themed.theme, definition);
+});

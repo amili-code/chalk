@@ -99,6 +99,24 @@ export interface ChalkInstance {
 	level: ColorSupportLevel;
 
 	/**
+	The semantic-style map passed to the constructor's `theme` option, or
+	`undefined` for instances that were created without one.
+
+	Read-only on the chalk root; attempting to assign throws. Mutating the
+	returned object is allowed but does not retroactively update any builder
+	that was already cached.
+
+	@example
+	```
+	import {Chalk} from 'chalk';
+
+	const log = new Chalk({theme: {success: 'green', error: 'red'}});
+	console.log(log.theme); //=> { success: 'green', error: 'red' }
+	```
+	*/
+	readonly theme: Theme | undefined;
+
+	/**
 	Use RGB values to set text color.
 
 	@example

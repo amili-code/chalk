@@ -69,8 +69,16 @@ const chalkFactory = (options = {}) => {
 	const themedProto = createThemedProto(options.theme);
 	chalk[PROTO] = themedProto;
 	Object.setPrototypeOf(chalk, themedProto);
-	// The chalk root has its own `[LEVEL]`; install the same direct-read descriptor the non-themed path uses so the inherited `proto` getter (which dereferences `[GENERATOR]` and would throw here) is never reached.
-	Object.defineProperty(chalk, 'level', levelDescriptor);
+	// Install `level` and `theme` together. `level` uses the same direct-read descriptor the non-themed path installs via `createChalk.prototype`, so the inherited `proto` getter (which dereferences `[GENERATOR]` and would throw here) is never reached. `theme` is non-writable so a stray `themed.theme = …` throws instead of silently shadowing the real styles.
+	Object.defineProperties(chalk, {
+		level: levelDescriptor,
+		theme: {
+			value: options.theme,
+			enumerable: true,
+			writable: false,
+			configurable: false,
+		},
+	});
 
 	return chalk;
 };
@@ -263,6 +271,15 @@ const createThemedProto = theme => {
 			},
 		});
 	}
+
+	// `theme` is exposed on the chalk root as a non-writable value property; here we mirror it on the per-instance prototype so `themed.bold.theme` resolves to the same definition by walking back through `[GENERATOR]`.
+	Object.defineProperty(themedProto, 'theme', {
+		enumerable: true,
+		configurable: true,
+		get() {
+			return (this[GENERATOR] ?? this).theme;
+		},
+	});
 
 	return themedProto;
 };
