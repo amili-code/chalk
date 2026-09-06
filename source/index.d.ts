@@ -26,6 +26,53 @@ export interface Options {
 	@throws If the value is neither `undefined` nor an integer from 0 to 3.
 	*/
 	readonly level?: ColorSupportLevel | undefined;
+
+	/**
+	A semantic-style map for the new instance. Each key becomes a chainable
+	style on the returned chalk, mapped to a built-in style (string) or a
+	composition of styles (array of strings).
+
+	@example
+	```
+	import {Chalk} from 'chalk';
+
+	const log = new Chalk({
+		theme: {
+			success: 'green',
+			error: ['red', 'bold'],
+			warning: 'yellow',
+		}
+	});
+
+	log.success('Done!');
+	log.error('Failed!');
+	```
+	*/
+	readonly theme?: Theme | undefined;
+}
+
+/**
+	A mapping of semantic style names to built-in styles or style compositions.
+
+	Each entry accepts:
+	- A string referencing a built-in style (e.g. `'red'`, `'bgBlue'`,
+	  `'underlineRed'`, `'hex'`, `'rgb'`, `'ansi256'`, any modifier, …).
+	- An array of such strings to compose styles in the given order
+	  (e.g. `['red', 'bold']`).
+*/
+export type Theme = {
+	readonly [name: string]: string | readonly string[] | ThemeStyleSpec;
+};
+
+/**
+	Raw `{open, close}` ANSI escape codes for a theme entry.
+
+	Exported for future expansion; the runtime currently only accepts strings
+	and string arrays as theme values.
+*/
+export interface ThemeStyleSpec {
+	readonly open: string;
+	readonly close: string;
 }
 
 /**

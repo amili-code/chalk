@@ -66,7 +66,8 @@
 	"xo": [
 		{
 			"ignores": [
-				"source/vendor"
+				"source/vendor",
+				"source/**/*.d.ts"
 			]
 		},
 		{

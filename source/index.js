@@ -11,6 +11,8 @@ const GENERATOR = Symbol('GENERATOR');
 const STYLER = Symbol('STYLER');
 const IS_EMPTY = Symbol('IS_EMPTY');
 const LEVEL = Symbol('LEVEL');
+// Per-instance prototype that carries `theme` getters. Held on the chalk function under this symbol so `createBuilder` can find it via `[GENERATOR]` without leaking across instances.
+const PROTO = Symbol('PROTO');
 
 const styles = Object.create(null);
 
@@ -40,6 +42,11 @@ const applyOptions = (object, options = {}) => {
 	// Detect level if not set manually. Written under the symbol rather than through `level`, as the prototype carrying that accessor is not installed until after this runs.
 	const colorLevel = stdoutColor ? stdoutColor.level : 0;
 	object[LEVEL] = options.level === undefined ? colorLevel : options.level;
+
+	// Theme shape is checked here so a malformed option throws before any prototype wiring happens. Per-entry validation (unknown style names, etc.) is delegated to `resolveThemeStyle` and surfaces from `createThemedProto`.
+	if (options.theme !== undefined && (options.theme === null || typeof options.theme !== 'object' || Array.isArray(options.theme))) {
+		throw new TypeError('The `theme` option must be a plain object');
+	}
 };
 
 export class Chalk {
@@ -49,11 +56,21 @@ export class Chalk {
 	}
 }
 
-const chalkFactory = options => {
+const chalkFactory = (options = {}) => {
 	const chalk = (...strings) => strings.join(' ');
 	applyOptions(chalk, options);
 
-	Object.setPrototypeOf(chalk, createChalk.prototype);
+	if (options.theme === undefined) {
+		Object.setPrototypeOf(chalk, createChalk.prototype);
+		return chalk;
+	}
+
+	// Build a per-instance prototype that carries the theme getters, then wire both the chalk function and any future builders to it via the shared module-level `proto`.
+	const themedProto = createThemedProto(options.theme);
+	chalk[PROTO] = themedProto;
+	Object.setPrototypeOf(chalk, themedProto);
+	// The chalk root has its own `[LEVEL]`; install the same direct-read descriptor the non-themed path uses so the inherited `proto` getter (which dereferences `[GENERATOR]` and would throw here) is never reached.
+	Object.defineProperty(chalk, 'level', levelDescriptor);
 
 	return chalk;
 };
@@ -184,9 +201,9 @@ const createBuilder = (self, _styler, _isEmpty) => {
 		return applyStyle(builder, arguments_.join(' '));
 	};
 
-	// We alter the prototype because we must return a function, but there is
-	// no way to create a function with a different prototype
-	Object.setPrototypeOf(builder, proto);
+	// Pick up the per-instance prototype when the chalk root carries a theme; otherwise builders share the module-level `proto`. Either way builders are still functions whose only difference from `self` is the `[STYLER]` / `[IS_EMPTY]` they carry.
+	const instanceProto = (self[GENERATOR] ?? self)[PROTO] ?? proto;
+	Object.setPrototypeOf(builder, instanceProto);
 
 	// Point every builder at the root generator instead of its immediate parent, so reading the level costs one property load rather than walking a `level` getter per link of the chain.
 	builder[GENERATOR] = self[GENERATOR] ?? self;
@@ -194,6 +211,60 @@ const createBuilder = (self, _styler, _isEmpty) => {
 	builder[IS_EMPTY] = _isEmpty;
 
 	return builder;
+};
+
+// Resolve a `theme` entry value to the `{open, close}` escape codes it represents. Strings reference a single built-in style; arrays compose styles in the given order, mirroring how chained `chalk.red.bold` would compose their codes.
+const resolveThemeStyle = value => {
+	if (typeof value === 'string') {
+		if (!Object.hasOwn(ansiStyles, value)) {
+			throw new TypeError(`Unknown theme style: "${value}"`);
+		}
+
+		return ansiStyles[value];
+	}
+
+	if (Array.isArray(value)) {
+		let open = '';
+		let close = '';
+
+		for (const part of value) {
+			// Only allow strings inside arrays so a malformed entry like `[['red']]` is rejected loudly rather than silently flattening.
+			if (typeof part !== 'string') {
+				throw new TypeError('Theme style values must be a string or an array of strings');
+			}
+
+			if (!Object.hasOwn(ansiStyles, part)) {
+				throw new TypeError(`Unknown theme style: "${part}"`);
+			}
+
+			open += ansiStyles[part].open;
+			// Close codes wrap in reverse so a single nested block unwinds correctly when one `theme` style is used on its own.
+			close = ansiStyles[part].close + close;
+		}
+
+		return {open, close};
+	}
+
+	throw new TypeError('Theme style values must be a string or an array of strings');
+};
+
+// Build the per-instance prototype that carries a chalk instance's theme. Inheriting from the shared `proto` keeps every built-in style getter (and the `[GENERATOR]`-based level getter for builders) free; the theme getters are own properties so they win over inherited built-ins on name collision.
+const createThemedProto = theme => {
+	const themedProto = Object.create(proto);
+
+	for (const [name, value] of Object.entries(theme)) {
+		const resolved = resolveThemeStyle(value);
+
+		Object.defineProperty(themedProto, name, {
+			get() {
+				const builder = createBuilder(this, createStyler(resolved.open, resolved.close, this[STYLER]), this[IS_EMPTY]);
+				Object.defineProperty(this, name, {value: builder});
+				return builder;
+			},
+		});
+	}
+
+	return themedProto;
 };
 
 const applyStyle = (self, string) => {

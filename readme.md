@@ -99,6 +99,33 @@ console.log(error('Error!'));
 console.log(warning('Warning!'));
 ```
 
+Or define a central theme once for your app by constructing a new `Chalk`
+instance with a `theme` option. Each key becomes a chainable style on the
+returned chalk, mapped to a built-in style or a composition of styles. Pass the
+themed chalk through your app the same way you would any other configuration.
+
+```js
+import {Chalk} from 'chalk';
+
+const log = new Chalk({
+	theme: {
+		success: 'green',
+		error: ['red', 'bold'],
+		warning: 'yellow',
+		info: 'cyan',
+	}
+});
+
+console.log(log.success('Done!'));
+console.log(log.error('Failed!'));
+console.log(log.warning.underline('Careful!'));   // chains with built-in modifiers
+console.log(log.underline.error('Critical!'));    // same in either order
+```
+
+Theme entry values can be a string (single built-in style) or an array of
+strings (composed styles). The themed instance is isolated from the default
+`chalk` export, so libraries that use plain `chalk` are unaffected.
+
 Take advantage of console.log [string substitution](https://nodejs.org/docs/latest/api/console.html#console_console_log_data_args):
 
 ```js
@@ -139,6 +166,31 @@ const customChalk = new Chalk({level: 0});
 | `1` | Basic color support (16 colors) |
 | `2` | 256 color support |
 | `3` | Truecolor support (16 million colors) |
+
+### new Chalk({theme: {...}})
+
+Construct a new `Chalk` instance with a semantic-style map. Each key becomes a
+chainable style on the returned chalk, mapped to a built-in style name (string)
+or a composition of built-in styles (array of strings). Theme styles chain with
+every built-in style in either order, and the themed instance is isolated from
+the default `chalk` export.
+
+```js
+import {Chalk} from 'chalk';
+
+const log = new Chalk({
+	theme: {
+		success: 'green',
+		error: ['red', 'bold'],
+		warning: 'yellow',
+	}
+});
+
+log.success('Done!');
+log.error('Failed!');
+log.error.underline('Critical!'); // theme style + built-in modifier
+log.underline.error('Critical!'); // same, just chained the other way
+```
 
 Both the `level` option and the `level` property throw for anything that is not an integer from 0 to 3. Omit the option, or pass `undefined`, to have the level detected instead.
 
